@@ -190,6 +190,17 @@ def _ddl():
             doubt_date TEXT DEFAULT '',
             created_at {ts_default}
         )""",
+        f"""CREATE TABLE IF NOT EXISTS adaptive_profile (
+            id {pk_auto},
+            subject TEXT NOT NULL,
+            chapter_title TEXT NOT NULL,
+            current_level TEXT DEFAULT 'Medium',
+            last_accuracy REAL DEFAULT 0,
+            attempts INTEGER DEFAULT 0,
+            recommended_action TEXT DEFAULT 'Practice',
+            updated_at {ts_default},
+            UNIQUE(subject, chapter_title)
+        )""",
     ]
 
 
@@ -326,6 +337,17 @@ def save_quiz_result(subject, chapter_title, difficulty, total, correct, time_ta
     conn.commit()
     conn.close()
     add_points(correct * 10)
+
+    # 🧠 Adaptive Learning Engine — auto-tune difficulty for next time.
+    # Imported lazily to avoid a circular import (adaptive_engine imports db).
+    try:
+        if subject and chapter_title:
+            from modules.adaptive_engine import update_after_quiz
+            update_after_quiz(subject, chapter_title, score_pct)
+    except Exception as _e:
+        # Adaptive update should NEVER break the quiz flow
+        print(f"adaptive update failed: {_e}")
+
     return score_pct
 
 
@@ -693,6 +715,70 @@ def get_doubt_count():
     row = _fetchone(conn, "SELECT COUNT(*) AS c FROM doubt_history")
     conn.close()
     return (row or {}).get("c", 0) or 0
+
+
+# ─────────────────────────────────────────────────────────
+# ADAPTIVE PROFILE (Adaptive Learning Engine)
+# ─────────────────────────────────────────────────────────
+
+def get_adaptive_profile(subject, chapter_title):
+    """Return the adaptive row for (subject, chapter), or None."""
+    conn = get_connection()
+    row = _fetchone(
+        conn,
+        "SELECT * FROM adaptive_profile WHERE subject=? AND chapter_title=?",
+        (subject, chapter_title),
+    )
+    conn.close()
+    return row
+
+
+def upsert_adaptive_profile(subject, chapter_title, current_level,
+                            last_accuracy, recommended_action, attempts_delta=1):
+    """Insert or update the adaptive profile row for (subject, chapter)."""
+    conn = get_connection()
+    existing = _fetchone(
+        conn,
+        "SELECT attempts FROM adaptive_profile WHERE subject=? AND chapter_title=?",
+        (subject, chapter_title),
+    )
+    new_attempts = (existing or {}).get("attempts", 0) + attempts_delta if existing else attempts_delta
+
+    if USE_PG:
+        _exec(
+            conn,
+            """INSERT INTO adaptive_profile
+                (subject, chapter_title, current_level, last_accuracy, attempts, recommended_action, updated_at)
+               VALUES (?,?,?,?,?,?, NOW())
+               ON CONFLICT (subject, chapter_title)
+               DO UPDATE SET current_level=EXCLUDED.current_level,
+                             last_accuracy=EXCLUDED.last_accuracy,
+                             attempts=EXCLUDED.attempts,
+                             recommended_action=EXCLUDED.recommended_action,
+                             updated_at=NOW()""",
+            (subject, chapter_title, current_level, last_accuracy, new_attempts, recommended_action),
+        )
+    else:
+        # SQLite path: rely on UNIQUE + REPLACE
+        _exec(
+            conn,
+            """INSERT OR REPLACE INTO adaptive_profile
+                (id, subject, chapter_title, current_level, last_accuracy, attempts, recommended_action, updated_at)
+               VALUES (
+                 (SELECT id FROM adaptive_profile WHERE subject=? AND chapter_title=?),
+                 ?,?,?,?,?,?, CURRENT_TIMESTAMP)""",
+            (subject, chapter_title,
+             subject, chapter_title, current_level, last_accuracy, new_attempts, recommended_action),
+        )
+    conn.commit()
+    conn.close()
+
+
+def get_all_adaptive_profiles():
+    conn = get_connection()
+    rows = _fetchall(conn, "SELECT * FROM adaptive_profile ORDER BY updated_at DESC")
+    conn.close()
+    return rows
 
 
 # ─────────────────────────────────────────────────────────

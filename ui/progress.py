@@ -6,6 +6,10 @@ import streamlit as st
 from utils.config import SUBJECTS, get_subject, BADGES
 from utils.helpers import format_time, get_grade_emoji, get_score_color
 import utils.database as db
+from modules.adaptive_engine import (
+    LEVEL_COLORS as ADAPTIVE_LEVEL_COLORS,
+    ACTION_ICON as ADAPTIVE_ACTION_ICON,
+)
 
 
 def render_progress():
@@ -93,6 +97,43 @@ def _render_student_progress():
             """, unsafe_allow_html=True)
     else:
         st.info("No quizzes yet! Go to Practice to start! 🚀")
+
+    # ── 🧠 Adaptive Levels by Chapter ─────────────────────────
+    st.markdown("<br>")
+    st.markdown("### 🧠 Your Adaptive Learning Levels")
+    st.caption(
+        "The tutor automatically adjusts difficulty per chapter based on your last quiz. "
+        "Complete a quiz to see this update."
+    )
+    adaptive_rows = db.get_all_adaptive_profiles()
+    if adaptive_rows:
+        for row in adaptive_rows:
+            subj = get_subject(row.get("subject") or "")
+            level = row.get("current_level", "Medium")
+            action = row.get("recommended_action", "Practice")
+            acc = row.get("last_accuracy", 0) or 0
+            attempts = row.get("attempts", 0) or 0
+            level_color = ADAPTIVE_LEVEL_COLORS.get(level, "#74B9FF")
+            action_icon = ADAPTIVE_ACTION_ICON.get(action, "📝")
+
+            col_a, col_b, col_c, col_d = st.columns([3, 2, 2, 2])
+            with col_a:
+                st.markdown(
+                    f"**{subj['icon']} {subj['name']}** — {row.get('chapter_title', '')}"
+                )
+            with col_b:
+                st.markdown(
+                    f"<span style='background:{level_color};color:white;"
+                    f"padding:3px 10px;border-radius:999px;font-weight:700;'>"
+                    f"🎯 {level}</span>",
+                    unsafe_allow_html=True,
+                )
+            with col_c:
+                st.markdown(f"{action_icon} **{action}**")
+            with col_d:
+                st.caption(f"Last: {acc:.0f}% • {attempts} attempt(s)")
+    else:
+        st.info("Take a quiz in any chapter to start building your adaptive profile! 🚀")
 
     # ── Weak Areas ────────────────────────────────────────────
     st.markdown("<br>")

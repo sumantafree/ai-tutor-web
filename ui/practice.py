@@ -9,6 +9,12 @@ from utils.config import SUBJECTS, SYLLABUS, get_subject, DIFFICULTY_LEVELS
 from utils.helpers import get_grade_emoji, get_score_color, get_difficulty_color
 import utils.database as db
 from modules.quiz_engine import build_quiz, score_quiz, build_practice_test, get_rapid_fire_questions
+from modules.adaptive_engine import (
+    get_profile as get_adaptive_profile,
+    update_after_quiz as adaptive_update_after_quiz,
+    render_badge_html as render_adaptive_badge,
+    render_change_banner_html as render_adaptive_change_banner,
+)
 
 
 def render_practice():
@@ -74,7 +80,20 @@ def _render_chapter_quiz():
             selected_chapter = st.selectbox("📑 Chapter", chapter_titles, index=default_ch, key="quiz_chapter")
 
         with col3:
-            difficulty = st.selectbox("🎯 Difficulty", DIFFICULTY_LEVELS, index=1, key="quiz_diff")
+            # 🧠 Adaptive option appears first; falls back to manual choice.
+            difficulty = st.selectbox(
+                "🎯 Difficulty",
+                ["🧠 Adaptive"] + DIFFICULTY_LEVELS,
+                index=0,
+                key="quiz_diff",
+                help="Adaptive uses your last performance on this chapter to pick the right level.",
+            )
+            if difficulty == "🧠 Adaptive":
+                difficulty = "Adaptive"
+
+        # 🧠 Show the current adaptive badge for this (subject, chapter)
+        _profile = get_adaptive_profile(subject_id, selected_chapter)
+        st.markdown(render_adaptive_badge(_profile), unsafe_allow_html=True)
 
         num_q = st.slider("Number of Questions", 3, 10, 5, key="quiz_num_q")
 
@@ -196,24 +215,50 @@ def _show_quiz_results(questions, subject_id, chapter, difficulty):
     correct, total, percentage, results = score_quiz(questions)
     time_taken = st.session_state.get("quiz_time_taken", 0)
 
-    # Save to database
-    db.save_quiz_result(subject_id, chapter, difficulty, total, correct, time_taken)
+    # Save to database — guarded so re-renders don't double-save / double-update.
+    save_key = f"quiz_saved_{id(questions)}"
+    adaptive_delta = None
+    if not st.session_state.get(save_key):
+        # 🧠 Snapshot the adaptive level BEFORE the save so we can show "Level Up!" banners.
+        before = get_adaptive_profile(subject_id, chapter)
 
-    # Save individual answers
-    for r in results:
-        db.save_question_attempt(
-            subject_id, chapter,
-            r["question"], r["student_answer"],
-            r["correct_answer"], r["is_correct"], difficulty
-        )
+        db.save_quiz_result(subject_id, chapter, difficulty, total, correct, time_taken)
+        for r in results:
+            db.save_question_attempt(
+                subject_id, chapter,
+                r["question"], r["student_answer"],
+                r["correct_answer"], r["is_correct"], difficulty
+            )
 
-    # Check badges
+        after = get_adaptive_profile(subject_id, chapter)
+        adaptive_delta = {
+            "previous_level": before.get("current_level"),
+            "current_level": after.get("current_level"),
+            "recommended_action": after.get("recommended_action"),
+            "level_changed": before.get("current_level") != after.get("current_level"),
+        }
+        st.session_state[save_key] = adaptive_delta
+    else:
+        adaptive_delta = st.session_state[save_key]
+
+    # Check badges (idempotent — award_badge uses INSERT OR IGNORE)
     from utils.helpers import check_and_award_badges
     new_badges = check_and_award_badges(db)
     if new_badges:
         for badge in new_badges:
             st.balloons()
             st.success(f"🎉 New Badge Earned: {badge['badge_icon']} **{badge['badge_name']}**!")
+
+    # 🧠 Adaptive change banner (Level Up / Let's Revise)
+    if adaptive_delta:
+        banner = render_adaptive_change_banner(adaptive_delta)
+        if banner:
+            st.markdown(banner, unsafe_allow_html=True)
+        # Always show the current adaptive badge
+        st.markdown(
+            render_adaptive_badge(get_adaptive_profile(subject_id, chapter)),
+            unsafe_allow_html=True,
+        )
 
     # Results header
     score_color = get_score_color(percentage)

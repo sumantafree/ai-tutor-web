@@ -86,6 +86,7 @@ def render_learn():
                              use_container_width=True):
                     st.session_state.page = "chat"
                     st.session_state.chat_subject = subject_id
+                    st.session_state.chat_chapter = chapter['title']
                     st.session_state.chat_context = (
                         f"Chapter: {chapter['title']}\nTopic: {topic}"
                     )
@@ -124,6 +125,7 @@ def render_learn():
         if st.button("🤖 Ask AI Tutor", key="learn_ask_tutor", use_container_width=True):
             st.session_state.page = "chat"
             st.session_state.chat_subject = subject_id
+            st.session_state.chat_chapter = chapter['title']
             st.session_state.chat_context = (
                 f"Chapter: {chapter['title']}\n"
                 f"Explanation: {chapter.get('explanation', '')[:500]}"
@@ -176,7 +178,10 @@ def _render_explanation(chapter, subj, subject_id):
             with st.spinner("Getting AI explanation..."):
                 from modules.ai_engine import ask_tutor
                 prompt = f"Explain '{chapter['title']}' in simple language for a Class 6 ICSE student. Include examples and make it fun!"
-                response, used_ai = ask_tutor(prompt, subject_id, "", api_key=api_key)
+                response, used_ai = ask_tutor(
+                    prompt, subject_id, "", api_key=api_key,
+                    chapter_title=chapter['title'],
+                )
                 st.markdown("### 🤖 AI Tutor Says:")
                 st.markdown(response)
 

@@ -197,6 +197,7 @@ def _process_message(user_input, subject_id, api_key):
         chapter_context=context,
         history=history,
         api_key=api_key,
+        chapter_title=st.session_state.get("chat_chapter", ""),
     )
 
     st.session_state.chat_messages.append({"role": "assistant", "message": response})

@@ -48,8 +48,25 @@ def _resolve_api_key(api_key: str) -> str:
     return ""
 
 
-def ask_tutor(question, subject="general", chapter_context="", history=None, api_key=""):
-    """Ask the AI tutor a question. Returns (answer_text, used_ai: bool)."""
+def _adaptive_addon(subject: str, chapter_title: str) -> str:
+    """Return the Adaptive Engine prompt addon, or '' if not applicable.
+    Lazy import + try/except so AI never breaks if the engine isn't wired."""
+    try:
+        if not subject or not chapter_title:
+            return ""
+        from modules.adaptive_engine import context_addon_for
+        return context_addon_for(subject, chapter_title) or ""
+    except Exception:
+        return ""
+
+
+def ask_tutor(question, subject="general", chapter_context="", history=None,
+              api_key="", chapter_title=""):
+    """Ask the AI tutor a question. Returns (answer_text, used_ai: bool).
+
+    `chapter_title` is optional — when provided we inject the Adaptive Engine
+    addon so the AI matches the student's current difficulty level.
+    """
     if not question.strip():
         return "Please type your question! 😊", False
 
@@ -59,6 +76,7 @@ def ask_tutor(question, subject="general", chapter_context="", history=None, api
             system = AI_SYSTEM_PROMPT
             if chapter_context:
                 system += f"\n\nCurrent topic context:\n{chapter_context}"
+            system += _adaptive_addon(subject, chapter_title)
 
             client = _get_gemini_client(key)
             config = _gemini_config(system)
@@ -207,7 +225,18 @@ def _gemini_generate(api_key, system_prompt, user_prompt):
 
 def generate_questions(subject, chapter, difficulty="Medium", count=5, api_key="",
                        uploaded_content=""):
-    """Generate practice questions. Returns list of {question, answer, type, ...}."""
+    """Generate practice questions. Returns list of {question, answer, type, ...}.
+
+    If `difficulty == 'Adaptive'`, we look up the Adaptive Engine profile
+    for (subject, chapter) and use its current level."""
+    # Adaptive: resolve to a concrete level
+    if difficulty == "Adaptive":
+        try:
+            from modules.adaptive_engine import get_profile
+            difficulty = get_profile(subject, chapter)["current_level"]
+        except Exception:
+            difficulty = "Medium"
+
     builtin_questions = _get_builtin_questions(subject, chapter, difficulty, count)
 
     key = _resolve_api_key(api_key)
@@ -216,6 +245,7 @@ def generate_questions(subject, chapter, difficulty="Medium", count=5, api_key="
         if uploaded_content:
             context += f"\n\nContent:\n{uploaded_content[:2000]}"
 
+        system = AI_SYSTEM_PROMPT + _adaptive_addon(subject, chapter)
         prompt = f"""Generate {count} practice questions for Class 6 ICSE students.
 Subject: {subject}
 Chapter/Topic: {chapter}
@@ -228,7 +258,7 @@ Return ONLY a numbered list in this format:
 
 Make questions appropriate for 11-year-old students."""
 
-        text = _gemini_generate(key, AI_SYSTEM_PROMPT, prompt)
+        text = _gemini_generate(key, system, prompt)
         if text:
             ai_questions = _parse_qa_text(text)
             if ai_questions:
