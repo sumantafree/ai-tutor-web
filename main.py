@@ -742,6 +742,7 @@ def render_sidebar():
             ("📝", "Practice",          "practice"),
             ("🎮", "Play Games",        "play"),
             ("🤖", "Ask AI Tutor",      "chat"),
+            ("📸", "Doubt Solver",      "doubt_solver"),
             ("📊", "Progress",          "progress"),
             ("📤", "Upload Materials",  "upload"),
             ("📅", "Study Planner",     "planner"),
@@ -968,6 +969,10 @@ def main():
     elif page == "chat":
         from ui.chat import render_chat
         render_chat()
+
+    elif page == "doubt_solver":
+        from ui.doubt_solver import render_doubt_solver
+        render_doubt_solver()
 
     elif page == "progress":
         from ui.progress import render_progress

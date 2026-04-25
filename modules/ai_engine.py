@@ -381,6 +381,75 @@ def _builtin_homework_solver(problem, subject):
     )
 
 
+# ─────────────────────────────────────────────────────────
+# IMAGE DOUBT SOLVER (Gemini Vision — no OCR needed)
+# ─────────────────────────────────────────────────────────
+
+def solve_image_doubt(image_bytes: bytes, mime_type: str = "image/jpeg",
+                      subject: str = "general", extra_note: str = "",
+                      api_key: str = ""):
+    """
+    Solve a doubt from an uploaded image (math problem, textbook excerpt, etc.).
+    Gemini 2.5 reads the image directly — no OCR step needed.
+
+    Returns (response_text: str, used_ai: bool).
+    """
+    key = _resolve_api_key(api_key)
+    if not key:
+        return (
+            "📸 **Image received!**\n\n"
+            "I need a Gemini API key to read images. Please add one in ⚙️ Settings → AI Settings.\n\n"
+            "Tip: meanwhile, type your question in **Ask AI Tutor** and I'll explain step-by-step.",
+            False,
+        )
+
+    if not image_bytes:
+        return ("Please upload an image first.", False)
+
+    client = _get_gemini_client(key)
+    config = _gemini_config(AI_SYSTEM_PROMPT)
+    if not client or not config:
+        return (
+            "Could not start the AI client. Please check your Gemini API key.",
+            False,
+        )
+
+    subj_name = (get_subject(subject)["name"]
+                 if subject and subject != "general" else "any subject")
+
+    note_block = f"\n\nAdditional note from the student:\n{extra_note.strip()}" if extra_note.strip() else ""
+
+    user_prompt = f"""A Class 6 ICSE student has uploaded a photo of a question they need help with.
+Subject hint: {subj_name}.{note_block}
+
+Please:
+1. First, in ONE line, restate what the question is asking (so the child knows you understood it).
+2. Then solve it **step by step**, one step per line, in very simple language.
+3. Mark the final answer clearly with **Final Answer:**
+4. End with one short follow-up question.
+
+If the image is unclear or has no question, say so kindly and ask the child to retake the photo with better light."""
+
+    try:
+        from google.genai import types
+        image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            config=config,
+            contents=[image_part, user_prompt],
+        )
+        text = (getattr(response, "text", None) or "").strip()
+        if text:
+            return text, True
+        return ("Hmm, I couldn't read that image clearly. Try a sharper photo with good light.", False)
+    except Exception as e:
+        return (
+            f"Sorry — I had trouble reading that image. ({type(e).__name__})\n\n"
+            "Please try again with a clearer, brighter photo of just the question.",
+            False,
+        )
+
+
 def analyze_exam_paper(extracted_text, api_key=""):
     """Analyze an uploaded exam paper and identify weak areas."""
     key = _resolve_api_key(api_key)

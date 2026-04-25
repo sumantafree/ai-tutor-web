@@ -180,6 +180,16 @@ def _ddl():
             completion_date TEXT,
             UNIQUE(subject, chapter_id)
         )""",
+        f"""CREATE TABLE IF NOT EXISTS doubt_history (
+            id {pk_auto},
+            subject TEXT,
+            note TEXT,
+            ai_response TEXT,
+            image_filename TEXT,
+            image_size_kb INTEGER DEFAULT 0,
+            doubt_date TEXT DEFAULT '',
+            created_at {ts_default}
+        )""",
     ]
 
 
@@ -639,6 +649,50 @@ def get_completed_chapters(subject=None):
         rows = _fetchall(conn, "SELECT * FROM chapter_progress WHERE completed=1")
     conn.close()
     return rows
+
+
+# ─────────────────────────────────────────────────────────
+# DOUBT HISTORY (Image Doubt Solver)
+# ─────────────────────────────────────────────────────────
+
+def save_doubt(subject, note, ai_response, image_filename="", image_size_kb=0):
+    today = str(date.today())
+    conn = get_connection()
+    _exec(
+        conn,
+        """INSERT INTO doubt_history
+            (subject, note, ai_response, image_filename, image_size_kb, doubt_date)
+           VALUES (?,?,?,?,?,?)""",
+        (subject, note, ai_response, image_filename, image_size_kb, today),
+    )
+    conn.commit()
+    conn.close()
+    add_points(5)
+
+
+def get_doubt_history(limit=20):
+    conn = get_connection()
+    rows = _fetchall(
+        conn,
+        "SELECT * FROM doubt_history ORDER BY created_at DESC LIMIT ?",
+        (limit,),
+    )
+    conn.close()
+    return rows
+
+
+def delete_doubt(doubt_id):
+    conn = get_connection()
+    _exec(conn, "DELETE FROM doubt_history WHERE id=?", (doubt_id,))
+    conn.commit()
+    conn.close()
+
+
+def get_doubt_count():
+    conn = get_connection()
+    row = _fetchone(conn, "SELECT COUNT(*) AS c FROM doubt_history")
+    conn.close()
+    return (row or {}).get("c", 0) or 0
 
 
 # ─────────────────────────────────────────────────────────
