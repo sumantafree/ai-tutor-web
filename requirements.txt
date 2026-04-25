@@ -5,6 +5,9 @@
 # ── Core web framework ──────────────────────────────────
 streamlit>=1.36.0
 
+# ── Voice (browser-native, free): mic recorder + speech_to_text wrapper
+streamlit-mic-recorder>=0.0.8
+
 # ── AI: Google Gemini (new SDK) ─────────────────────────
 google-genai>=0.3.0
 

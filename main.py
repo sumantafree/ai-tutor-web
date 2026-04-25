@@ -66,11 +66,40 @@ def inject_css():
     /* ── Sidebar ── */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%) !important;
-        color: white !important;
+        color: #FFFFFF !important;
     }
 
     [data-testid="stSidebar"] * {
-        color: white !important;
+        color: #FFFFFF !important;
+    }
+
+    /* ── Sidebar nav buttons (override the global light button style) ── */
+    [data-testid="stSidebar"] [data-testid="stButton"] button {
+        background-color: rgba(255,255,255,0.06) !important;
+        color: #FFFFFF !important;
+        border: 1px solid rgba(255,255,255,0.18) !important;
+        text-align: left !important;
+        padding: 0.55rem 0.9rem !important;
+    }
+
+    [data-testid="stSidebar"] [data-testid="stButton"] button p,
+    [data-testid="stSidebar"] [data-testid="stButton"] button span,
+    [data-testid="stSidebar"] [data-testid="stButton"] button div {
+        color: #FFFFFF !important;
+    }
+
+    [data-testid="stSidebar"] [data-testid="stButton"] button:hover {
+        background-color: rgba(74,144,226,0.55) !important;   /* #4A90E2 hover */
+        border-color: rgba(74,144,226,0.9) !important;
+        color: #FFFFFF !important;
+    }
+
+    /* Active page (Streamlit applies type="primary") */
+    [data-testid="stSidebar"] [data-testid="stButton"] button[kind="primary"] {
+        background: linear-gradient(135deg, #6C5CE7, #4A90E2) !important;
+        border-color: #6C5CE7 !important;
+        color: #FFFFFF !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
     }
 
     /* ── Page Title ── */
@@ -826,33 +855,56 @@ def render_settings():
             st.success("✅ Gemini API key is configured - Full AI mode is ON!")
 
     with tab3:
-        st.markdown("### 🔊 Voice Settings")
-        from modules.voice_engine import get_voice_status, is_tts_available
+        st.markdown("### 🔊 Voice Settings (Browser-native — free, no APIs)")
+        from modules.browser_voice import (
+            render_capabilities_probe, render_test_voice_button,
+            LANG_LABELS, LANG_CODES,
+        )
 
-        voice_status = get_voice_status()
+        st.caption(
+            "Voice runs **inside your browser** using the Web Speech API. "
+            "Best in Google Chrome or Microsoft Edge. The first time, your browser "
+            "will ask for microphone permission — please tap **Allow**."
+        )
 
-        st.markdown("#### System Status")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            icon = "✅" if voice_status["tts_available"] else "❌"
-            st.markdown(f"{icon} **Text-to-Speech**")
-            if not voice_status["tts_available"]:
-                st.caption("Run: pip install pyttsx3")
-        with col2:
-            icon = "✅" if voice_status["stt_available"] else "❌"
-            st.markdown(f"{icon} **Speech Recognition**")
-            if not voice_status["stt_available"]:
-                st.caption("Run: pip install SpeechRecognition pyaudio")
-        with col3:
-            icon = "✅" if voice_status["microphone"] else "❌"
-            st.markdown(f"{icon} **Microphone**")
+        st.markdown("#### Browser capabilities (this device)")
+        render_capabilities_probe()
 
-        voice_on = st.toggle("Enable Voice Replies", value=st.session_state.get("voice_enabled", False),
-                             key="settings_voice_toggle")
-        st.session_state.voice_enabled = voice_on
+        st.markdown("#### Preferences")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            voice_on = st.toggle(
+                "🔊 Speak AI replies aloud",
+                value=st.session_state.get("voice_enabled", True),
+                key="settings_voice_toggle",
+            )
+            st.session_state.voice_enabled = voice_on
+        with col_b:
+            cur_lang = st.session_state.get("voice_lang", "en-IN")
+            lang_idx = LANG_CODES.index(cur_lang) if cur_lang in LANG_CODES else 0
+            lang_label = st.selectbox(
+                "🌐 Voice language",
+                LANG_LABELS,
+                index=lang_idx,
+                key="settings_lang_sel",
+            )
+            st.session_state.voice_lang = LANG_CODES[LANG_LABELS.index(lang_label)]
 
-        if voice_on and not voice_status["tts_available"]:
-            st.warning("Voice not available. Please install pyttsx3: `pip install pyttsx3`")
+        render_test_voice_button(
+            lang=st.session_state.get("voice_lang", "en-IN"),
+            key="settings_test_voice",
+        )
+
+        with st.expander("Why don't I see my old microphone permissions?"):
+            st.markdown(
+                "- Voice now runs in **your browser**, not on the server, so it works "
+                "for free with no API keys and no installs.\n"
+                "- If the mic doesn't pop up: open the lock 🔒 icon in the address bar → "
+                "set Microphone to **Allow** for this site.\n"
+                "- Firefox doesn't support browser speech recognition — use Chrome, Edge, "
+                "or Brave for the mic. Speech output (the AI talking back) works "
+                "everywhere."
+            )
 
         st.markdown("---")
         st.markdown("### 🗄️ Data Management")
