@@ -1,0 +1,21 @@
+# AI Home Tutor - Web / Cloud Deployment
+# Used by Render.com during build.
+# For local desktop use, add pyttsx3, SpeechRecognition, pytesseract as needed.
+
+# ── Core web framework ──────────────────────────────────
+streamlit>=1.36.0
+
+# ── AI: Google Gemini (new SDK) ─────────────────────────
+google-genai>=0.3.0
+
+# ── Database: Postgres (Supabase) driver ────────────────
+psycopg2-binary>=2.9.9
+
+# ── PDF / file processing (cloud-safe) ──────────────────
+pdfplumber>=0.10.0
+PyPDF2>=3.0.0
+Pillow>=10.0.0
+
+# ── Utilities ───────────────────────────────────────────
+requests>=2.31.0
+python-dotenv>=1.0.0
