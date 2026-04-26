@@ -201,6 +201,30 @@ def _ddl():
             updated_at {ts_default},
             UNIQUE(subject, chapter_title)
         )""",
+        # ───── Dynamic Curriculum (Phase 4) ─────
+        f"""CREATE TABLE IF NOT EXISTS cur_subjects (
+            id {pk_auto},
+            code TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            icon TEXT DEFAULT '📚',
+            color TEXT DEFAULT '#74B9FF',
+            bg TEXT DEFAULT '#E5F4FB',
+            sort_order INTEGER DEFAULT 0,
+            created_at {ts_default}
+        )""",
+        f"""CREATE TABLE IF NOT EXISTS cur_chapters (
+            id {pk_auto},
+            subject_id INTEGER NOT NULL,
+            original_id INTEGER DEFAULT 0,
+            title TEXT NOT NULL,
+            explanation TEXT DEFAULT '',
+            topics_json TEXT DEFAULT '[]',
+            key_points_json TEXT DEFAULT '[]',
+            examples_json TEXT DEFAULT '[]',
+            questions_json TEXT DEFAULT '[]',
+            sort_order INTEGER DEFAULT 0,
+            created_at {ts_default}
+        )""",
     ]
 
 

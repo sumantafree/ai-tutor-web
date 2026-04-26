@@ -5,7 +5,7 @@ AI Tutor Chat Page - Ask questions and get answers (with browser-native voice).
 import os
 import streamlit as st
 import html as html_module
-from utils.config import SUBJECTS, get_subject
+from utils.config import get_subject, get_subjects
 import utils.database as db
 from modules.ai_engine import ask_tutor, is_valid_gemini_key
 from modules.browser_voice import (
@@ -15,6 +15,8 @@ from modules.browser_voice import (
 
 def render_chat():
     """Render the AI tutor chat page."""
+    SUBJECTS = get_subjects()         # 🧠 Live curriculum (Phase 4)
+
     st.markdown('<div class="page-title">🤖 Ask AI Tutor</div>', unsafe_allow_html=True)
 
     student = db.get_student()

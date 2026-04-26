@@ -4,7 +4,7 @@ Upload Page UI - Upload books, syllabus, and previous papers
 
 import streamlit as st
 import os
-from utils.config import SUBJECTS, get_subject, DATA_DIR
+from utils.config import get_subject, get_subjects, get_syllabus, DATA_DIR
 from utils.helpers import ensure_data_dirs
 import utils.database as db
 from modules.ocr_engine import extract_text_from_file, extract_chapters_from_text, save_processed_content, get_ocr_status
@@ -57,6 +57,8 @@ def render_upload():
 
 def _render_book_upload():
     """Upload textbook pages."""
+    SUBJECTS = get_subjects()         # 🧠 Live curriculum (Phase 4)
+
     st.markdown("### 📚 Upload Textbook Pages")
     st.info(
         "📌 **How to organize your uploads:**\n"
@@ -139,6 +141,8 @@ def _render_book_upload():
 
 def _render_syllabus_upload():
     """Upload syllabus files."""
+    SUBJECTS = get_subjects()         # 🧠 Live curriculum (Phase 4)
+
     st.markdown("### 📋 Upload Syllabus")
     st.info(
         "Upload your ICSE Class 6 syllabus here. The tutor will use it to:\n"
@@ -197,7 +201,7 @@ def _render_syllabus_upload():
     )
 
     if st.button("📋 View Built-in ICSE Syllabus", key="view_builtin_syllabus"):
-        from utils.config import SYLLABUS
+        SYLLABUS = get_syllabus()      # 🧠 Live curriculum (Phase 4)
         for subject in SUBJECTS:
             sid = subject["id"]
             if sid in SYLLABUS:
@@ -212,6 +216,8 @@ def _render_syllabus_upload():
 
 def _render_paper_upload():
     """Upload previous year papers and answer sheets."""
+    SUBJECTS = get_subjects()         # 🧠 Live curriculum (Phase 4)
+
     st.markdown("### 📝 Upload Question Papers & Answer Sheets")
     st.info(
         "Upload these types of documents:\n"
@@ -295,6 +301,8 @@ def _render_paper_upload():
 
 def _render_uploaded_files():
     """View all uploaded files."""
+    SUBJECTS = get_subjects()         # 🧠 Live curriculum (Phase 4)
+
     st.markdown("### 📂 Uploaded Files")
 
     uploaded = db.get_uploaded_content()

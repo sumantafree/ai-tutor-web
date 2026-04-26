@@ -5,13 +5,14 @@ Home Page UI - Dashboard / Welcome screen
 import streamlit as st
 import random
 from datetime import date
-from utils.config import SUBJECTS, get_subject
+from utils.config import get_subject, get_subjects
 from utils.helpers import get_day_greeting, get_motivation, format_time, get_grade_emoji
 import utils.database as db
 
 
 def render_home():
     """Render the home dashboard."""
+    SUBJECTS = get_subjects()  # 🧠 Live curriculum (Phase 4)
 
     student = db.get_student()
     name = student.get("name", "Student")

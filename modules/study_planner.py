@@ -4,7 +4,7 @@ Study Planner - Daily study planning and scheduling
 
 import random
 from datetime import date, timedelta
-from utils.config import SUBJECTS, SYLLABUS
+from utils.config import get_subjects, get_syllabus
 
 # ─────────────────────────────────────────────────────────
 # AUTO PLANNER
@@ -15,6 +15,8 @@ def generate_daily_plan(weak_areas=None, study_days_per_week=5, daily_hours=2):
     Generate a smart weekly study plan.
     Returns list of plan items for the next 7 days.
     """
+    SUBJECTS = get_subjects()         # 🧠 Live curriculum (Phase 4)
+    SYLLABUS = get_syllabus()
     plan = []
     today = date.today()
     daily_minutes = daily_hours * 60

@@ -5,7 +5,7 @@ Practice Page UI - Quizzes, tests, and question answering
 import streamlit as st
 import time
 import html as html_module
-from utils.config import SUBJECTS, SYLLABUS, get_subject, DIFFICULTY_LEVELS
+from utils.config import get_subject, get_subjects, get_syllabus, DIFFICULTY_LEVELS
 from utils.helpers import get_grade_emoji, get_score_color, get_difficulty_color
 import utils.database as db
 from modules.quiz_engine import build_quiz, score_quiz, build_practice_test, get_rapid_fire_questions
@@ -46,6 +46,8 @@ def render_practice():
 
 def _render_chapter_quiz():
     """Chapter-specific quiz."""
+    SUBJECTS = get_subjects()         # 🧠 Live curriculum (Phase 4)
+    SYLLABUS = get_syllabus()
 
     student = db.get_student()
     api_key = student.get("api_key", "") or ""
@@ -313,6 +315,8 @@ def _show_quiz_results(questions, subject_id, chapter, difficulty):
 
 def _render_practice_test():
     """Full subject practice test."""
+    SUBJECTS = get_subjects()         # 🧠 Live curriculum (Phase 4)
+
     student = db.get_student()
     api_key = student.get("api_key", "") or ""
 
@@ -397,6 +401,7 @@ def _run_test_session():
 
 def _render_rapid_fire():
     """Rapid fire question mode - 10 questions, limited time."""
+    SUBJECTS = get_subjects()         # 🧠 Live curriculum (Phase 4)
 
     st.markdown("### ⚡ Rapid Fire Quiz")
     st.info("Answer questions as fast as you can! 10 questions | Try to beat your best score!")
@@ -488,6 +493,8 @@ def _run_rapid_fire():
 
 def _render_homework_solver():
     """AI-powered homework solver."""
+    SUBJECTS = get_subjects()         # 🧠 Live curriculum (Phase 4)
+
     st.markdown("### 📖 Homework Solver")
     st.info("📝 Type your homework question and get a step-by-step explanation!")
 

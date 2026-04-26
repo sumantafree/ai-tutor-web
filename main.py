@@ -40,7 +40,7 @@ init_database()
 ensure_data_dirs()
 
 # ── Import modules AFTER path setup ──────────────────────
-from utils.config import SUBJECTS, APP_TITLE, get_subject
+from utils.config import APP_TITLE, get_subject
 import utils.database as db
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -746,6 +746,7 @@ def render_sidebar():
             ("📊", "Progress",          "progress"),
             ("📤", "Upload Materials",  "upload"),
             ("📅", "Study Planner",     "planner"),
+            ("📚", "Curriculum",        "admin_curriculum"),
             ("⚙️", "Settings",         "settings"),
         ]
 
@@ -973,6 +974,10 @@ def main():
     elif page == "doubt_solver":
         from ui.doubt_solver import render_doubt_solver
         render_doubt_solver()
+
+    elif page == "admin_curriculum":
+        from ui.admin_curriculum import render_admin_curriculum
+        render_admin_curriculum()
 
     elif page == "progress":
         from ui.progress import render_progress

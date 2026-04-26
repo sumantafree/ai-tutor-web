@@ -4,7 +4,7 @@ Quiz Engine - Generate, manage, and score quizzes
 
 import random
 import time
-from utils.config import SYLLABUS, get_subject, DIFFICULTY_LEVELS
+from utils.config import get_subject, get_syllabus, DIFFICULTY_LEVELS
 from modules.ai_engine import generate_questions
 
 # ─────────────────────────────────────────────────────────
@@ -132,6 +132,7 @@ def _clean_answer(ans):
 
 def get_rapid_fire_questions(subject=None, count=20):
     """Get quick true/false or very short questions for rapid fire mode."""
+    SYLLABUS = get_syllabus()         # 🧠 Live curriculum (Phase 4)
     rapid_questions = []
 
     subjects_to_use = [subject] if subject else list(SYLLABUS.keys())[:5]
@@ -159,6 +160,7 @@ def get_rapid_fire_questions(subject=None, count=20):
 
 def get_mcq_questions(subject, chapter_title, count=5):
     """Get MCQ format questions."""
+    SYLLABUS = get_syllabus()         # 🧠 Live curriculum (Phase 4)
     subj_data = SYLLABUS.get(subject, {})
     mcq_questions = []
 
@@ -215,6 +217,7 @@ def _make_fake_mcq(question, correct_answer):
 
 def build_practice_test(subject, difficulty="Mixed", num_questions=10, api_key=""):
     """Build a full practice test from all chapters of a subject."""
+    SYLLABUS = get_syllabus()         # 🧠 Live curriculum (Phase 4)
     subj_data = SYLLABUS.get(subject, {})
     chapters = subj_data.get("chapters", [])
 

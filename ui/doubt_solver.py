@@ -14,7 +14,7 @@ import html as html_module
 import streamlit as st
 
 import utils.database as db
-from utils.config import SUBJECTS, get_subject
+from utils.config import get_subject, get_subjects
 from modules.ai_engine import solve_image_doubt, is_valid_gemini_key
 from modules.browser_voice import speak, render_replay_button, LANG_LABELS, LANG_CODES
 
@@ -30,6 +30,8 @@ MIME_BY_EXT = {
 
 
 def render_doubt_solver():
+    SUBJECTS = get_subjects()         # 🧠 Live curriculum (Phase 4)
+
     st.markdown('<div class="page-title">📸 AI Doubt Solver</div>', unsafe_allow_html=True)
 
     student = db.get_student()

@@ -5,13 +5,15 @@ Learn Page UI - Chapter learning mode with explanations, examples, key points
 import streamlit as st
 import time
 import html as html_module
-from utils.config import SUBJECTS, SYLLABUS, get_subject
+from utils.config import get_subject, get_subjects, get_syllabus
 import utils.database as db
 from modules.voice_engine import speak, is_tts_available
 
 
 def render_learn():
     """Render the learning page."""
+    SUBJECTS = get_subjects()        # 🧠 Live curriculum (Phase 4)
+    SYLLABUS = get_syllabus()
 
     st.markdown('<div class="page-title">📖 Learn</div>', unsafe_allow_html=True)
 

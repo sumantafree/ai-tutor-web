@@ -5,7 +5,7 @@ Uses Google Gemini API when key is available, falls back to built-in responses.
 
 import os
 import random
-from utils.config import AI_SYSTEM_PROMPT, SYLLABUS, get_subject
+from utils.config import AI_SYSTEM_PROMPT, get_subject, get_syllabus
 
 # Default model — Gemini 2.5 Flash is fast and free-tier-friendly.
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
@@ -112,6 +112,7 @@ def ask_tutor(question, subject="general", chapter_context="", history=None,
 
 def _builtin_response(question, subject, context):
     """Generate a helpful response without Gemini using built-in knowledge."""
+    SYLLABUS = get_syllabus()         # 🧠 Live curriculum (Phase 4)
     q_lower = question.lower().strip()
 
     greetings = ["hello", "hi", "hey", "good morning", "good afternoon", "good evening"]
@@ -268,6 +269,7 @@ Make questions appropriate for 11-year-old students."""
 
 
 def _get_builtin_questions(subject, chapter, difficulty, count):
+    SYLLABUS = get_syllabus()         # 🧠 Live curriculum (Phase 4)
     subj_data = SYLLABUS.get(subject, {})
     chapters = subj_data.get("chapters", [])
 

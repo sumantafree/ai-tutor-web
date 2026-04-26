@@ -3,7 +3,7 @@ Progress Page UI - Student progress tracking and parent dashboard
 """
 
 import streamlit as st
-from utils.config import SUBJECTS, get_subject, BADGES
+from utils.config import get_subject, get_subjects, BADGES
 from utils.helpers import format_time, get_grade_emoji, get_score_color
 import utils.database as db
 from modules.adaptive_engine import (
@@ -31,6 +31,8 @@ def render_progress():
 
 def _render_student_progress():
     """Student-friendly progress view."""
+    SUBJECTS = get_subjects()         # 🧠 Live curriculum (Phase 4)
+
     summary = db.get_dashboard_summary()
     student = summary["student"]
     name = student.get("name", "Student")
@@ -180,6 +182,8 @@ def _render_student_progress():
 
 def _render_parent_dashboard():
     """Clean parent-friendly summary dashboard."""
+    SUBJECTS = get_subjects()         # 🧠 Live curriculum (Phase 4)
+
     st.markdown("### 👨‍👩‍👧 Parent Summary Report")
     st.info("📋 A simple overview of your child's learning progress")
 

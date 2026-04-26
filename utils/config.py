@@ -37,11 +37,42 @@ SUBJECTS = [
 
 SUBJECT_IDS = [s["id"] for s in SUBJECTS]
 
+
+# ─────────────────────────────────────────────────────────
+# DYNAMIC CURRICULUM ACCESSORS (Phase 4)
+# ─────────────────────────────────────────────────────────
+# Consumers should now call get_subjects() / get_syllabus() / get_subject()
+# to pick up live edits made via the Admin Curriculum UI. The constants
+# above (SUBJECTS, SYLLABUS) remain as the SEED data used on first run.
+
+def get_subjects():
+    """Live list of subjects from the curriculum DB. Falls back to SUBJECTS."""
+    try:
+        from utils.curriculum import get_all_subjects
+        return get_all_subjects()
+    except Exception:
+        return SUBJECTS
+
+
+def get_syllabus():
+    """Live syllabus dict from the curriculum DB. Falls back to SYLLABUS."""
+    try:
+        from utils.curriculum import get_syllabus as _live
+        return _live()
+    except Exception:
+        return SYLLABUS
+
+
 def get_subject(subject_id):
-    for s in SUBJECTS:
-        if s["id"] == subject_id:
-            return s
-    return SUBJECTS[0]
+    """Live single-subject lookup; falls back to seed list if DB unavailable."""
+    try:
+        from utils.curriculum import get_subject as _live
+        return _live(subject_id)
+    except Exception:
+        for s in SUBJECTS:
+            if s["id"] == subject_id:
+                return s
+        return SUBJECTS[0]
 
 # ─────────────────────────────────────────────────────────
 # ICSE CLASS 6 SYLLABUS (Built-in content)

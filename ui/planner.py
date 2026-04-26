@@ -4,7 +4,7 @@ Study Planner Page UI
 
 import streamlit as st
 from datetime import date, timedelta
-from utils.config import SUBJECTS, get_subject
+from utils.config import get_subject, get_subjects
 from utils.helpers import format_time
 import utils.database as db
 from modules.study_planner import generate_daily_plan, get_study_tips, get_revision_schedule
@@ -28,6 +28,7 @@ def render_planner():
 
 def _render_today_plan():
     """Show today's study plan."""
+    SUBJECTS = get_subjects()         # 🧠 Live curriculum (Phase 4)
     today = str(date.today())
     today_display = date.today().strftime("%A, %d %B %Y")
 
@@ -169,6 +170,8 @@ def _render_weekly_planner():
 
 def _render_study_tips():
     """Show study tips and recommendations."""
+    SUBJECTS = get_subjects()         # 🧠 Live curriculum (Phase 4)
+
     st.markdown("### 💡 Study Tips & Strategies")
 
     subject_names = ["🌟 General Tips"] + [f"{s['icon']} {s['name']}" for s in SUBJECTS]
