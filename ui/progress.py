@@ -10,6 +10,7 @@ from modules.adaptive_engine import (
     LEVEL_COLORS as ADAPTIVE_LEVEL_COLORS,
     ACTION_ICON as ADAPTIVE_ACTION_ICON,
 )
+from modules.ai_engine import generate_parent_recommendations, is_valid_gemini_key
 
 
 def render_progress():
@@ -181,115 +182,249 @@ def _render_student_progress():
 
 
 def _render_parent_dashboard():
-    """Clean parent-friendly summary dashboard."""
+    """Phase 3: comprehensive parent-facing dashboard."""
+    import os as _os
+    from datetime import date as _date
     SUBJECTS = get_subjects()         # 🧠 Live curriculum (Phase 4)
-
-    st.markdown("### 👨‍👩‍👧 Parent Summary Report")
-    st.info("📋 A simple overview of your child's learning progress")
 
     summary = db.get_dashboard_summary()
     student = summary["student"]
     name = student.get("name", "Student")
-    today_pts = db.get_points().get("today_points", 0)
+    avatar = student.get("avatar", "🎓")
 
-    # ── Summary Cards ─────────────────────────────────────────
-    st.markdown(f"#### 📊 {name}'s Learning Report")
-    st.markdown(f"*Last updated: Today*")
+    week = db.get_week_summary(days=7)
+    cmp = db.get_week_comparison(days=7)
 
-    col1, col2 = st.columns(2)
+    # ── Header card ───────────────────────────────────────────
+    st.markdown(
+        f"""
+        <div style="background: linear-gradient(135deg,#1a1a2e,#16213e);
+                    color:white; border-radius:16px; padding:1.2rem 1.5rem;
+                    margin-bottom:1rem;">
+            <div style="font-size:1.05rem; opacity:0.8;">📋 Weekly Learning Report</div>
+            <div style="font-size:1.6rem; font-weight:800; margin-top:0.2rem;">
+                {avatar}  {name}'s Week
+            </div>
+            <div style="opacity:0.7; font-size:0.95rem; margin-top:0.2rem;">
+                Last 7 days · Updated {_date.today().strftime('%A, %d %B %Y')}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    with col1:
-        st.markdown("""
-        <div class="parent-card">
-        """, unsafe_allow_html=True)
+    # ── This Week At A Glance ─────────────────────────────────
+    st.markdown("#### 📊 This Week At A Glance")
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        delta_min = week["study_minutes"] - cmp["last_minutes"]
+        st.metric("⏱️ Study time",
+                  format_time(week["study_minutes"]),
+                  f"{'+' if delta_min >= 0 else ''}{delta_min} min vs last week",
+                  delta_color="normal" if delta_min >= 0 else "inverse")
+    with c2:
+        delta_q = week["quizzes_taken"] - cmp["last_quizzes"]
+        st.metric("📝 Quizzes",
+                  week["quizzes_taken"],
+                  f"{'+' if delta_q >= 0 else ''}{delta_q} vs last week",
+                  delta_color="normal" if delta_q >= 0 else "inverse")
+    with c3:
+        delta_s = round(week["avg_score"] - cmp["last_avg_score"], 1)
+        st.metric("🎯 Avg score",
+                  f"{week['avg_score']:.0f}%" if week["avg_score"] else "—",
+                  f"{'+' if delta_s >= 0 else ''}{delta_s}% vs last week"
+                  if cmp["last_avg_score"] > 0 else None,
+                  delta_color="normal" if delta_s >= 0 else "inverse")
+    with c4:
+        st.metric("📸 Doubts solved", week["doubts_solved"])
+    st.caption(f"Active on **{week['active_days']} of 7 days**.")
 
-        st.markdown("**📈 Overall Stats**")
-        stats_data = {
-            "Total Points Earned": f"⭐ {summary['points']}",
-            "Current Study Streak": f"🔥 {summary['streak']} days",
-            "Total Study Days": f"📅 {summary['study_days']} days",
-            "Total Study Time": f"⏱️ {format_time(summary['total_study_time'])}",
-            "Chapters Completed": f"✅ {summary['completed_chapters']}",
-            "Quizzes Taken": f"📝 {summary['quiz_count']}",
-            "Badges Earned": f"🏅 {summary['badges_count']}",
-            "Points Today": f"⭐ {today_pts}",
+    # ── Daily activity chart ──────────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("#### 📅 Daily Activity")
+    minutes_by_day = week["study_minutes_by_day"]
+    quizzes_by_day = week["quizzes_by_day"]
+    if any(minutes_by_day.values()) or any(quizzes_by_day.values()):
+        # Build a tiny dict-of-lists structure that st.bar_chart understands
+        chart_data = {
+            "Study minutes": list(minutes_by_day.values()),
+            "Quizzes taken": list(quizzes_by_day.values()),
         }
-        for key, val in stats_data.items():
-            st.markdown(f"- **{key}:** {val}")
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    with col2:
-        st.markdown("**📊 Subject-wise Average Scores**")
-        subj_stats = summary["subject_stats"]
-        if subj_stats:
-            for subj in SUBJECTS:
-                sid = subj["id"]
-                if sid in subj_stats:
-                    stat = subj_stats[sid]
-                    avg = stat.get("avg_score", 0)
-                    grade_emoji = "✅" if avg >= 75 else ("⚠️" if avg >= 50 else "❌")
-                    st.markdown(f"{grade_emoji} {subj['icon']} **{subj['name']}**: {avg:.0f}%")
-        else:
-            st.info("No quiz data yet. Encourage your child to take quizzes!")
-
-    # ── Areas needing attention ───────────────────────────────
-    st.markdown("<br>")
-    weak_areas = summary["weak_areas"]
-    if weak_areas:
-        st.markdown("#### ⚠️ Topics Needing Extra Attention")
-        st.warning("Your child scored below 60% in these topics. Consider extra practice or tuition help.")
-        for area in weak_areas:
-            subj = get_subject(area["subject"])
-            st.markdown(f"• **{subj['name']} — {area['chapter_title']}**: {area['avg_score']:.0f}% average")
+        # Use the date short labels as the x-axis index
+        day_labels = [_short_day_label(d) for d in minutes_by_day.keys()]
+        try:
+            import pandas as _pd
+            df = _pd.DataFrame(chart_data, index=day_labels)
+            st.bar_chart(df, use_container_width=True)
+        except Exception:
+            # Fallback without pandas
+            for d, m in minutes_by_day.items():
+                qc = quizzes_by_day.get(d, 0)
+                st.markdown(f"- **{_short_day_label(d)}** — {m} min · {qc} quiz")
     else:
-        if summary["quiz_count"] > 0:
-            st.success("🌟 Excellent! No weak areas detected. Your child is performing well!")
-        else:
-            st.info("Complete some quizzes to see performance analysis.")
+        st.info("No activity in the last 7 days yet.")
 
-    # ── Recommendations ───────────────────────────────────────
-    st.markdown("<br>")
-    st.markdown("#### 💡 Recommendations for Parents")
-    recommendations = _generate_parent_recommendations(summary)
-    for rec in recommendations:
-        st.markdown(f"• {rec}")
+    # ── Subject performance ──────────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("#### 📚 Subject Performance (all-time)")
+    subj_stats = summary["subject_stats"]
+    if subj_stats:
+        ranked = sorted(
+            [(s, subj_stats[s["id"]]) for s in SUBJECTS if s["id"] in subj_stats],
+            key=lambda t: t[1].get("avg_score", 0) or 0,
+            reverse=True,
+        )
+        strongest_subject_name = ranked[0][0]["name"] if ranked else None
+        for subj, stat in ranked:
+            avg = stat.get("avg_score", 0) or 0
+            qcount = stat.get("quiz_count", 0) or 0
+            color = get_score_color(avg)
+            col_a, col_b, col_c = st.columns([2, 6, 2])
+            with col_a:
+                st.markdown(f"**{subj['icon']} {subj['name']}**")
+            with col_b:
+                st.progress(min(max(avg / 100.0, 0.0), 1.0),
+                            text=f"{avg:.0f}% avg over {qcount} quiz(zes)")
+            with col_c:
+                if avg >= 75:
+                    st.markdown("✅ Strong")
+                elif avg >= 50:
+                    st.markdown("🟡 OK")
+                else:
+                    st.markdown("🔴 Weak")
+    else:
+        strongest_subject_name = None
+        st.info("No quiz data yet. Encourage your child to take a quiz today.")
 
-
-def _generate_parent_recommendations(summary):
-    """Generate personalized recommendations for parents."""
-    recs = []
-    streak = summary["streak"]
-    study_time = summary["total_study_time"]
-    quiz_count = summary["quiz_count"]
-    weak_areas = summary["weak_areas"]
-
-    if streak == 0:
-        recs.append("📅 **Encourage daily study habit** - even 30 minutes a day makes a big difference!")
-    elif streak >= 7:
-        recs.append("🔥 **Amazing streak!** Keep encouraging this daily habit - it's working!")
-
-    if study_time < 60:
-        recs.append("⏱️ **Increase study time** - Aim for at least 1-2 hours of focused study daily")
-
-    if quiz_count < 5:
-        recs.append("📝 **Encourage more practice** - Regular quizzes help reinforce learning")
-
+    # ── Topics that need attention ───────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("#### ⚠️ Topics That Need Attention")
+    weak_areas = summary["weak_areas"] or []
     if weak_areas:
-        subjects_weak = list(set([w["subject"] for w in weak_areas]))
-        subj_names = [get_subject(s)["name"] for s in subjects_weak[:2]]
-        recs.append(f"📚 **Extra practice needed in**: {', '.join(subj_names)}")
+        for area in weak_areas[:5]:
+            subj = get_subject(area["subject"])
+            avg = area.get("avg_score", 0) or 0
+            attempts = area.get("attempts", 0) or 0
+            ca, cb = st.columns([5, 1])
+            with ca:
+                st.markdown(
+                    f"**{subj['icon']} {subj['name']} — {area['chapter_title']}**  "
+                    f"<span style='color:#636e72;'>· avg {avg:.0f}% over {attempts} attempt(s)</span>",
+                    unsafe_allow_html=True,
+                )
+            with cb:
+                if st.button("📖 Revise", key=f"parent_revise_{area['subject']}_{area['chapter_title'][:14]}"):
+                    st.session_state.page = "learn"
+                    st.session_state.selected_subject = area["subject"]
+                    st.rerun()
+    else:
+        st.success("🌟 No weak topics right now — your child is on track!")
 
-    if not recs:
-        recs = [
-            "✅ Your child is doing well! Keep up the encouragement.",
-            "🎯 Try introducing new subjects to explore all areas of the syllabus",
-            "🎮 The brain games section helps with cognitive development - encourage playing!"
-        ]
+    # ── AI recommendations ──────────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("#### 🤖 Personalized Recommendations")
 
-    recs.append("💬 **Ask your child** to explain what they learned today - teaching reinforces memory!")
-    recs.append("🌟 **Celebrate achievements** - praise effort, not just results!")
-    return recs
+    # Build the small payload for the AI
+    ai_payload = {
+        "student_name": name,
+        "week": {
+            "study_minutes": week["study_minutes"],
+            "quizzes_taken": week["quizzes_taken"],
+            "avg_score": week["avg_score"],
+            "doubts_solved": week["doubts_solved"],
+            "active_days": week["active_days"],
+        },
+        "previous_week": {
+            "study_minutes": cmp["last_minutes"],
+            "quizzes_taken": cmp["last_quizzes"],
+            "avg_score": cmp["last_avg_score"],
+        },
+        "weak_areas": [
+            {
+                "subject": get_subject(w["subject"])["name"],
+                "chapter_title": w["chapter_title"],
+                "avg_score": round(float(w.get("avg_score") or 0), 1),
+                "attempts": w.get("attempts", 0),
+            }
+            for w in weak_areas[:5]
+        ],
+        "strongest_subject": strongest_subject_name,
+        "completed_chapters": summary.get("completed_chapters", 0),
+        "current_streak_days": summary.get("streak", 0),
+    }
+
+    api_key = student.get("api_key", "") or ""
+    has_ai = is_valid_gemini_key(api_key) or is_valid_gemini_key(_os.environ.get("GEMINI_API_KEY", ""))
+
+    cache_key = f"_parent_recs_v1_{name}_{week['quizzes_taken']}_{week['doubts_solved']}_{week['study_minutes']}"
+    if cache_key not in st.session_state:
+        st.session_state[cache_key] = None
+
+    if st.session_state[cache_key] is None:
+        col_a, col_b = st.columns([1, 4])
+        with col_a:
+            if st.button("✨ Generate", key="gen_parent_recs",
+                         use_container_width=True, type="primary"):
+                with st.spinner("Thinking…"):
+                    text, used_ai = generate_parent_recommendations(ai_payload, api_key=api_key)
+                st.session_state[cache_key] = {"text": text, "used_ai": used_ai}
+                st.rerun()
+        with col_b:
+            st.caption(
+                "Click **Generate** to get a personalised, AI-written summary of "
+                f"what to focus on this week. {'✅ Gemini connected.' if has_ai else '🟡 Add your Gemini API key in ⚙️ Settings for AI-powered advice (basic version still works without it).'}"
+            )
+    else:
+        rec = st.session_state[cache_key]
+        st.markdown(rec["text"])
+        st.caption("✅ AI-generated" if rec["used_ai"] else "ℹ️ Built-in (basic) — add a Gemini API key for richer advice.")
+        if st.button("🔄 Regenerate", key="regen_parent_recs"):
+            st.session_state[cache_key] = None
+            st.rerun()
+
+    # ── Recent activity log ─────────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("#### 🕒 Recent Activity")
+    events = db.get_recent_activity_log(limit=15)
+    if events:
+        for e in events[:12]:
+            ts = (e.get("ts") or "")[:16].replace("T", " ")
+            subject = e.get("subject") or ""
+            subj_label = ""
+            if subject:
+                try:
+                    s = get_subject(subject)
+                    subj_label = f"{s['icon']} {s['name']}"
+                except Exception:
+                    subj_label = subject
+            detail = e.get("detail") or ""
+            st.markdown(
+                f"- 🕒 `{ts}`  ·  {subj_label}  ·  {e['label']}"
+                + (f"  <span style='color:#636e72;'>· {detail}</span>" if detail else ""),
+                unsafe_allow_html=True,
+            )
+    else:
+        st.info("No activity logged yet.")
+
+    # ── Footer: overall stats ────────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("#### 🏆 All-time totals")
+    today_pts = db.get_points().get("today_points", 0)
+    cols = st.columns(4)
+    with cols[0]: st.metric("⭐ Points",   summary["points"])
+    with cols[1]: st.metric("🔥 Streak",   f"{summary['streak']} days")
+    with cols[2]: st.metric("📚 Chapters", summary["completed_chapters"])
+    with cols[3]: st.metric("🏅 Badges",   summary["badges_count"])
+
+
+def _short_day_label(date_str: str) -> str:
+    """Convert 'YYYY-MM-DD' to 'Mon 24' style label for charts."""
+    try:
+        from datetime import datetime as _dt
+        d = _dt.strptime(date_str, "%Y-%m-%d").date()
+        return d.strftime("%a %d")
+    except Exception:
+        return date_str
 
 
 def _render_badges():

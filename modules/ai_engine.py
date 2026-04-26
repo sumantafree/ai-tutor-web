@@ -482,6 +482,89 @@ If the image is unclear or has no question, say so kindly and ask the child to r
         )
 
 
+# ─────────────────────────────────────────────────────────
+# PARENT RECOMMENDATIONS (Phase 3 — used by progress.py)
+# ─────────────────────────────────────────────────────────
+
+PARENT_SYSTEM_PROMPT = """You are an experienced education consultant advising the
+parent of an 11-year-old Class 6 ICSE student in India.
+
+Tone:
+- Warm, supportive, NEVER alarmist.
+- Specific and actionable — name the exact subjects/chapters from the data.
+- Short. Each bullet is one or two short sentences.
+
+Rules:
+- Output 4–6 bullet points only. Use markdown bullets ("- ").
+- The first bullet must START with one POSITIVE observation (something
+  the child is doing well).
+- Then 2–3 concrete actions the parent can take this week.
+- End with one bullet that's ENCOURAGING ("Overall, …").
+- Never recommend paid services or external apps. Stick to actions inside
+  this app (Learn / Practice / Doubt Solver / Study Planner)."""
+
+
+def generate_parent_recommendations(summary_payload: dict, api_key: str = "") -> tuple:
+    """Returns (markdown_text, used_ai: bool).
+    `summary_payload` is a small dict the caller builds from db helpers."""
+    key = _resolve_api_key(api_key)
+    if key:
+        try:
+            import json as _json
+            prompt = (
+                "Here's a snapshot of the child's last 7 days:\n\n"
+                + _json.dumps(summary_payload, indent=2, default=str)
+                + "\n\nWrite the parent recommendations now."
+            )
+            text = _gemini_generate(key, PARENT_SYSTEM_PROMPT, prompt)
+            if text:
+                return text, True
+        except Exception:
+            pass
+    return _builtin_parent_recommendations(summary_payload), False
+
+
+def _builtin_parent_recommendations(s: dict) -> str:
+    """Rule-based fallback when no Gemini key is available."""
+    lines = []
+    week = s.get("week", {})
+    weak = s.get("weak_areas", [])
+    strongest_subject = s.get("strongest_subject")
+
+    # 1) positive opener
+    if (week.get("active_days") or 0) >= 4:
+        lines.append(f"- 👏 **Great consistency!** Your child was active on "
+                     f"{week.get('active_days')} of the last 7 days.")
+    elif strongest_subject:
+        lines.append(f"- 👏 **Strong area:** {strongest_subject} is going well — "
+                     f"keep encouraging it.")
+    else:
+        lines.append("- 👏 **Good start!** Every minute spent learning counts. "
+                     "Help your child build a small daily routine.")
+
+    # 2-3) actions
+    if weak:
+        top_weak = weak[0]
+        lines.append(f"- 📖 **Revise this week:** {top_weak.get('subject', '')} — "
+                     f"{top_weak.get('chapter_title', '')} (avg {round(float(top_weak.get('avg_score') or 0))}%). "
+                     f"Open the Learn page and read the chapter together.")
+    if (week.get("study_minutes") or 0) < 60:
+        lines.append("- ⏱️ **Add 15 minutes a day** of focused study. Short and "
+                     "regular beats long and rare.")
+    else:
+        lines.append("- 📝 **Mix in more practice.** Take 1 quiz per day on the "
+                     "Practice page so the AI can tune the right difficulty.")
+    if (week.get("doubts_solved") or 0) == 0:
+        lines.append("- 📸 **Try the Doubt Solver:** snap a photo of any tricky "
+                     "homework question — the AI will explain it step by step.")
+
+    # 4) closer
+    lines.append("- 🌟 Overall, your child is on the right track — celebrate small "
+                 "wins and keep the routine going!")
+
+    return "\n".join(lines[:6])
+
+
 def analyze_exam_paper(extracted_text, api_key=""):
     """Analyze an uploaded exam paper and identify weak areas."""
     key = _resolve_api_key(api_key)

@@ -806,6 +806,249 @@ def get_all_adaptive_profiles():
 
 
 # ─────────────────────────────────────────────────────────
+# ANALYTICS — time-windowed views for the Parent Dashboard
+# ─────────────────────────────────────────────────────────
+
+def _date_range(days: int) -> list[str]:
+    """Return YYYY-MM-DD strings from (days-1) ago up to today, ascending."""
+    today = date.today()
+    return [str(today - timedelta(days=i)) for i in range(days - 1, -1, -1)]
+
+
+def get_study_minutes_by_day(days: int = 7) -> dict:
+    """Total study minutes per date for the last N days. Includes zero-days."""
+    range_dates = _date_range(days)
+    cutoff = range_dates[0]
+    conn = get_connection()
+    rows = _fetchall(
+        conn,
+        """SELECT session_date, COALESCE(SUM(duration_minutes), 0) AS m
+           FROM study_sessions
+           WHERE session_date >= ?
+           GROUP BY session_date""",
+        (cutoff,),
+    )
+    conn.close()
+    by_day = {r["session_date"]: int(r["m"] or 0) for r in rows}
+    return {d: by_day.get(d, 0) for d in range_dates}
+
+
+def get_quiz_count_by_day(days: int = 7) -> dict:
+    range_dates = _date_range(days)
+    cutoff = range_dates[0]
+    conn = get_connection()
+    rows = _fetchall(
+        conn,
+        """SELECT quiz_date, COUNT(*) AS c
+           FROM quiz_results
+           WHERE quiz_date >= ?
+           GROUP BY quiz_date""",
+        (cutoff,),
+    )
+    conn.close()
+    by_day = {r["quiz_date"]: int(r["c"] or 0) for r in rows}
+    return {d: by_day.get(d, 0) for d in range_dates}
+
+
+def get_avg_quiz_score_by_day(days: int = 7) -> dict:
+    range_dates = _date_range(days)
+    cutoff = range_dates[0]
+    conn = get_connection()
+    rows = _fetchall(
+        conn,
+        """SELECT quiz_date, AVG(score_percent) AS s
+           FROM quiz_results
+           WHERE quiz_date >= ?
+           GROUP BY quiz_date""",
+        (cutoff,),
+    )
+    conn.close()
+    by_day = {r["quiz_date"]: float(r["s"] or 0) for r in rows}
+    return {d: round(by_day.get(d, 0), 1) for d in range_dates}
+
+
+def get_doubt_count_by_day(days: int = 7) -> dict:
+    range_dates = _date_range(days)
+    cutoff = range_dates[0]
+    conn = get_connection()
+    rows = _fetchall(
+        conn,
+        """SELECT doubt_date, COUNT(*) AS c
+           FROM doubt_history
+           WHERE doubt_date >= ?
+           GROUP BY doubt_date""",
+        (cutoff,),
+    )
+    conn.close()
+    by_day = {r["doubt_date"]: int(r["c"] or 0) for r in rows}
+    return {d: by_day.get(d, 0) for d in range_dates}
+
+
+def get_week_summary(days: int = 7) -> dict:
+    """High-level totals for the last N days."""
+    sm = get_study_minutes_by_day(days)
+    qc = get_quiz_count_by_day(days)
+    ds = get_doubt_count_by_day(days)
+    avg_scores = get_avg_quiz_score_by_day(days)
+    # Compute avg score weighted by quiz count
+    total_quizzes = sum(qc.values())
+    if total_quizzes > 0:
+        weighted = sum(avg_scores[d] * qc[d] for d in qc)
+        avg_score = round(weighted / total_quizzes, 1) if total_quizzes else 0
+    else:
+        avg_score = 0
+
+    return {
+        "study_minutes": sum(sm.values()),
+        "quizzes_taken": total_quizzes,
+        "avg_score": avg_score,
+        "doubts_solved": sum(ds.values()),
+        "active_days": sum(1 for d in sm if sm[d] > 0 or qc[d] > 0 or ds[d] > 0),
+        "study_minutes_by_day": sm,
+        "quizzes_by_day": qc,
+        "doubts_by_day": ds,
+        "avg_score_by_day": avg_scores,
+    }
+
+
+def get_week_comparison(days: int = 7) -> dict:
+    """Returns this week's totals AND last week's totals for diff display."""
+    today = date.today()
+    this_cutoff = str(today - timedelta(days=days - 1))
+    last_start = str(today - timedelta(days=2 * days - 1))
+    last_end = str(today - timedelta(days=days))
+
+    conn = get_connection()
+    this_minutes = (_fetchone(
+        conn,
+        "SELECT COALESCE(SUM(duration_minutes), 0) AS m FROM study_sessions WHERE session_date >= ?",
+        (this_cutoff,),
+    ) or {}).get("m") or 0
+    last_minutes = (_fetchone(
+        conn,
+        "SELECT COALESCE(SUM(duration_minutes), 0) AS m FROM study_sessions WHERE session_date >= ? AND session_date <= ?",
+        (last_start, last_end),
+    ) or {}).get("m") or 0
+
+    this_quizzes = (_fetchone(
+        conn,
+        "SELECT COUNT(*) AS c FROM quiz_results WHERE quiz_date >= ?",
+        (this_cutoff,),
+    ) or {}).get("c") or 0
+    last_quizzes = (_fetchone(
+        conn,
+        "SELECT COUNT(*) AS c FROM quiz_results WHERE quiz_date >= ? AND quiz_date <= ?",
+        (last_start, last_end),
+    ) or {}).get("c") or 0
+
+    this_score_row = _fetchone(
+        conn,
+        "SELECT AVG(score_percent) AS s FROM quiz_results WHERE quiz_date >= ?",
+        (this_cutoff,),
+    )
+    last_score_row = _fetchone(
+        conn,
+        "SELECT AVG(score_percent) AS s FROM quiz_results WHERE quiz_date >= ? AND quiz_date <= ?",
+        (last_start, last_end),
+    )
+    this_avg = round(float((this_score_row or {}).get("s") or 0), 1)
+    last_avg = round(float((last_score_row or {}).get("s") or 0), 1)
+    conn.close()
+
+    return {
+        "this_minutes": int(this_minutes), "last_minutes": int(last_minutes),
+        "this_quizzes": int(this_quizzes), "last_quizzes": int(last_quizzes),
+        "this_avg_score": this_avg,        "last_avg_score": last_avg,
+    }
+
+
+def get_recent_activity_log(limit: int = 15) -> list:
+    """Mixed-source recent activity, newest first.
+    Each event: {ts, kind, subject, label, detail}."""
+    conn = get_connection()
+    quizzes = _fetchall(
+        conn,
+        """SELECT created_at AS ts, subject, chapter_title, score_percent,
+                  correct_answers, total_questions
+           FROM quiz_results ORDER BY created_at DESC LIMIT ?""",
+        (limit,),
+    )
+    sessions = _fetchall(
+        conn,
+        """SELECT created_at AS ts, subject, chapter_title, duration_minutes, activity_type
+           FROM study_sessions ORDER BY created_at DESC LIMIT ?""",
+        (limit,),
+    )
+    chapters = _fetchall(
+        conn,
+        """SELECT completion_date AS ts, subject, chapter_title
+           FROM chapter_progress WHERE completed=1
+           ORDER BY completion_date DESC LIMIT ?""",
+        (limit,),
+    )
+    doubts = _fetchall(
+        conn,
+        """SELECT created_at AS ts, subject, image_filename, note
+           FROM doubt_history ORDER BY created_at DESC LIMIT ?""",
+        (limit,),
+    )
+    badges_rows = _fetchall(
+        conn,
+        """SELECT earned_date AS ts, badge_id, badge_name, badge_icon
+           FROM badges ORDER BY earned_date DESC LIMIT ?""",
+        (limit,),
+    )
+    conn.close()
+
+    events = []
+    for r in quizzes:
+        events.append({
+            "ts": r.get("ts") or "",
+            "kind": "quiz",
+            "subject": r.get("subject") or "",
+            "label": f"📝 Quiz: {r.get('chapter_title', '')}",
+            "detail": f"Score {round(float(r.get('score_percent') or 0))}% "
+                      f"({r.get('correct_answers')}/{r.get('total_questions')})",
+        })
+    for r in sessions:
+        events.append({
+            "ts": r.get("ts") or "",
+            "kind": "study",
+            "subject": r.get("subject") or "",
+            "label": f"📖 Studied: {r.get('chapter_title', '')}",
+            "detail": f"{r.get('duration_minutes') or 0} min ({r.get('activity_type') or 'learn'})",
+        })
+    for r in chapters:
+        events.append({
+            "ts": r.get("ts") or "",
+            "kind": "chapter",
+            "subject": r.get("subject") or "",
+            "label": f"✅ Chapter completed: {r.get('chapter_title', '')}",
+            "detail": "",
+        })
+    for r in doubts:
+        events.append({
+            "ts": r.get("ts") or "",
+            "kind": "doubt",
+            "subject": r.get("subject") or "",
+            "label": f"📸 Doubt solved",
+            "detail": (r.get("note") or r.get("image_filename") or "")[:80],
+        })
+    for r in badges_rows:
+        events.append({
+            "ts": r.get("ts") or "",
+            "kind": "badge",
+            "subject": "",
+            "label": f"{r.get('badge_icon') or '🏅'} New badge: {r.get('badge_name') or ''}",
+            "detail": "",
+        })
+
+    # Sort newest first by ts string (works for ISO timestamps and YYYY-MM-DD)
+    events.sort(key=lambda e: str(e.get("ts") or ""), reverse=True)
+    return events[:limit]
+
+
+# ─────────────────────────────────────────────────────────
 # DASHBOARD SUMMARY
 # ─────────────────────────────────────────────────────────
 
